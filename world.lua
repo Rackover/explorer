@@ -1,4 +1,5 @@
 local celltypes = require('celltypes')
+
 local brush = require('brush')
 local utils = require('utils')
 
@@ -49,6 +50,7 @@ function myWorld:new(vec2_size, seed)
   
   return newWorld
 end
+
 
 function myWorld:heightColor(pos, cellcolor)
   local height = self.heightmap[pos.x][pos.y]

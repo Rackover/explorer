@@ -1,4 +1,3 @@
- 
 local celltypes = require('celltypes')
 local cellinfo = require('cellinfo')
 local world = require("world")
@@ -49,6 +48,7 @@ end
 
 function love.keypressed(key)
   -- in v0.9.2 and earlier space is represented by the actual space character ' ', so check for both
+
   if (key == "right") then
     explorer:move(thisWorld, {x=1,y=0})
     
@@ -69,15 +69,11 @@ end
 
 function love.update(dt)
   
-  --[[
-  -- keyboard actions for our hero
-  if love.keyboard.isDown("left") then
-    hero.x = hero.x - hero.speed*dt
-  elseif love.keyboard.isDown("right") then
-    hero.x = hero.x + hero.speed*dt
-  end
-
-  --]]
+  view.position = {
+    x= math.floor((explorer.position.x/thisWorld.size)*(thisWorld.size/view.size)) +1,
+    y= math.floor((explorer.position.y/thisWorld.size)*(thisWorld.size/view.size)) +1
+  }
+  
 end
 
 --- Game functions
@@ -104,6 +100,7 @@ function love.draw()
   love.graphics.clear()
   
   -- Draw background
+
   love.graphics.setColor(0,0,0,255)
   love.graphics.rectangle("fill", 0, 0, w, h)
   
@@ -120,6 +117,7 @@ end
 
 
 ---- Draw functions
+
 function view:refreshView(thisWorld, explorer)
   self.position = {
     x= math.floor(((explorer.position.x-1)/thisWorld.size.w)*(thisWorld.size.w/self.size.w)),
@@ -127,12 +125,15 @@ function view:refreshView(thisWorld, explorer)
   }
 end
 
+
 function drawExplorer(explorer, view, worldCellText)
   local x = explorer.position.x
   local y = explorer.position.y
   local drawPos = {
+
       x=(x-view.position.x*view.size.w-1)*view.unit,
       y=(y-view.position.y*view.size.h-1)*view.unit
+
   }
   worldCellText:set(explorer.character)
   
@@ -145,6 +146,7 @@ end
 function drawCell(thisWorld, pos, view, worldCellText)
   local x = pos.x
   local y = pos.y
+
   if (not thisWorld:inWorld({x=x, y=y})) then
     return
   end
@@ -160,8 +162,6 @@ function drawCell(thisWorld, pos, view, worldCellText)
   love.graphics.setColor(thisWorld:heightColor({x=x, y=y}, cellinfo[cell].color))
   love.graphics.draw(worldCellText, drawPos.x, drawPos.y)
 end
-
-
 
 
 function dump(o)
