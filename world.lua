@@ -1,38 +1,63 @@
 local celltypes = require('celltypes')
+local brush = require('brush')
+local utils = require('utils')
 
-local world = {
+local myWorld = {
   map = {{}},
-  size = {10,10},
+  heightmap = {{}},
+  size = {w=10,h=10},
   seed = 0
 }
 
--- Generates a new map covered in sand
-function world:new(int_size)
+-- Swaps two cells
+function myWorld:swapCells (pos1, pos2)
+  local tmp = self.map[pos1.x][pos1.y]
+  self.map[pos1.x][pos1.y] = self.map[pos2.x][pos2.y]
+  self.map[pos2.x][pos2.y] = tmp
+end
+
+-- Check if cell is within the boundaries of this world
+function myWorld:inWorld(pos)
+  return (utils.clamp(1, self.size.w, pos.x) == pos.x and utils.clamp(1, self.size.h, pos.y) == pos.y)
+end
+
+-- Generates a new map
+function myWorld:new(vec2_size, seed)
   newWorld = {}
   setmetatable(newWorld, self)
+  self.__index = self
   newWorld.map = {{}}
-  newWorld.size = int_size
+  newWorld.heightmap = {{}}
+  newWorld.size = vec2_size
+  newWorld.seed = seed
   
   -- Initializing map by filling with sand
-  for x=1, newWorld.size do
-    for y=1, newWorld.size do
-      
-      if newWorld.map[x] == nil then
-        newWorld.map[x] = {}
-      end
-      
-      newWorld.map[x][y] = celltypes.sand
-      
-      if (x > 8 and x < 10) then
-        newWorld.map[x-1][y] = celltypes.water
-        newWorld.map[x-2][y] = celltypes.dirt
-        newWorld.map[x-3][y] = celltypes.mountain
-        newWorld.map[x-4][y] = celltypes.forest
-      end
-    end
-  end
+  brush:initializeHeightmap(newWorld)
+  brush:fillMap(newWorld, celltypes.sand)
+  
+  --[[
+  brush:fillCircle(newWorld, {x=31, y=31}, 5, celltypes.forest)
+  brush:fillCircle(newWorld, {x=26, y=34}, 8, celltypes.forest)
+  brush:fillCircle(newWorld, {x=26, y=29}, 6, celltypes.forest)
+  brush:fillCircle(newWorld, {x=27, y=33}, 5, celltypes.dirt)
+  brush:fillCircle(newWorld, {x=26, y=34}, 4, celltypes.water)
+  brush:fillCircle(newWorld, {x=36, y=6}, 3, celltypes.forest)
+  --]]
+  brush:drawLine(newWorld, {x=25, y=40}, {x=115, y=10}, {3,5}, celltypes.water)
+  brush:drawLine(newWorld, {x=5, y=5}, {x=25, y=40}, {3,5}, celltypes.water)
+  --brush:makeWalls(newWorld, celltypes.mountain)
   
   return newWorld
 end
 
-return world
+function myWorld:heightColor(pos, cellcolor)
+  local height = self.heightmap[pos.x][pos.y]
+  local modifier = (height-0.5)*0.8
+  return {
+    cellcolor[1]+modifier, 
+    cellcolor[2]+modifier, 
+    cellcolor[3]+modifier
+  }
+end
+
+return myWorld
