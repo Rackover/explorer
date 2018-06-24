@@ -1,5 +1,7 @@
 io.stdout:setvbuf("no")
 
+local utf8 = require("utf8")
+
 local celltypes = require('celltypes')
 local cellinfo = require('cellinfo')
 local world = require("world")
@@ -17,15 +19,17 @@ local view = {}
 local theseWords = {}
 local screens = 5 -- the world will be screens² sized
 
+local chooseWord = true -- The player is still choosing the word, and not actually ingame
+local typedWord = ''
+local authorizedChars = "azertyuiopqsdfghjklmwxcvbn"
+local displayLabel = true
+
 -- debug elements 
 local debugText,debugFont
 
 -- On start
 function love.load(arg)
   --if arg and arg[#arg] == "-debug" then require("mobdebug").start() end
-  
-  -- Words
-  theseWords = words:new("home")
   
   -- View
   view.size = {w=15, h=15}
@@ -39,20 +43,38 @@ function love.load(arg)
   -- Window setup
   love.window.setMode(view.size.w*view.unit, view.size.h*view.unit, {fullscreen=false})
   
-  -- Game setup  
-  initializeGame()
-  
   -- Debug
   debugFont = love.graphics.newFont("res/font/tahoma.ttf", view.unit/2)
   debugText = love.graphics.newText(debugFont, "bonjour")
   
-  -- Init
-  view:refreshView(thisWorld, explorer)
-  
+end
+
+function love.textinput( text )
+  if (chooseWord) then
+    text = string.lower(text)
+    if (string.len(typedWord) < 9 and 
+        string.find(authorizedChars, text) ~= nil and
+        string.find(authorizedChars, text) <= string.len(authorizedChars)
+        ) then
+      typedWord = typedWord..text
+    end
+  end
 end
 
 function love.keypressed(key)
   -- in v0.9.2 and earlier space is represented by the actual space character ' ', so check for both
+  
+  if (chooseWord) then
+    if (key == "backspace") then
+      typedWord = string.sub(typedWord, 1, string.len(tostring(typedWord))-1)
+    elseif (key == "return") then
+      chooseWord = false
+      theseWords = words:new(typedWord)
+      initializeGame()
+      view:refreshView(thisWorld, explorer)
+    end
+    return
+  end
   if (key == "right") then
     explorer:move({x=1,y=0})
     
@@ -125,14 +147,28 @@ function explorer:move(vec2_direction)
         return 
       end
       local nextCell = thisWorld.map[nextPosition.x][nextPosition.y]
-      if (cellinfo[nextCell].solid) then 
+      local nextCellIsOccupied = false
+      for l,w in pairs(entities) do
+        if (w.position.x == nextPosition.x and
+            w.position.y == nextPosition.y and
+            w.solid and
+            (
+            ent.entityType ~= ent.types.key or
+            w.entityType ~= ent.types.door
+            )) then
+          ent.position.x = explorer.position.x
+          ent.position.y = explorer.position.y
+          explorer.position.x = futurePosition.x
+          explorer.position.y = futurePosition.y
+          return
+        end
+      end      
+    
+      if (cellinfo[nextCell].solid or nextCellIsOccupied) then 
         if (nextCell == celltypes.water) then
           -- the player pushed it in the water!
-          for l,w in pairs(entities) do
-            if (w == ent) then
-              entities[l] = nil
-            end
-          end
+          entities[k] = nil
+          
           explorer.position.x = futurePosition.x
           explorer.position.y = futurePosition.y
           dialog:start("Oh!It's underwater now...")
@@ -157,6 +193,7 @@ function explorer:move(vec2_direction)
   thisWorld:affect(self.position)
   self.position = futurePosition
   dialog:terminate()
+  displayLabel = false
   
   updateEntities(thisWorld, entities)
 end
@@ -233,9 +270,7 @@ function initializeGame()
   table.insert(entities, entity:new(entity.types.door, {x=explorer.position.x, y=explorer.position.y-1}))
   
   -- ((here for debugging only, creating a portal))
-    table.insert(entities, entity:newVillager({x=explorer.position.x, y=explorer.position.y+1}, dialog:getSentence(theseWords)))
-    --table.insert(entities, entity:new(entity.types.portal, {x=explorer.position.x, y=explorer.position.y+1}))
-  
+ 
   -- Put keys in the world
   for i=1,3 do
     local pos = {x=math.random(thisWorld.size.w), y=math.random(thisWorld.size.h)}
@@ -244,6 +279,17 @@ function initializeGame()
     end
     table.insert(entities, entity:new(entity.types.key, pos))
   end
+  
+  -- Put npcs  in the world
+  for i=1,1+math.random(4) do
+    local pos = {x=math.random(thisWorld.size.w), y=math.random(thisWorld.size.h)}
+    while (cellinfo[thisWorld.map[pos.x][pos.y]].solid) do
+      pos = {x=math.random(thisWorld.size.w), y=math.random(thisWorld.size.h)}
+    end
+    table.insert(entities, entity:newVillager(pos, dialog:getSentence(theseWords)))
+  end
+ 
+  displayLabel = true
 end
 
 -------
@@ -258,6 +304,39 @@ function love.draw()
   -- Draw background
   love.graphics.setColor(0,0,0,255)
   love.graphics.rectangle("fill", 0, 0, w, h)
+  
+  
+  if (chooseWord) then
+    local str = "Where do you want to go ?"
+    local breaks = 0
+    
+    love.graphics.setColor(255,255,255)
+    for i=1,#str do
+      
+      if (i*view.unit - (view.size.w)*view.unit*breaks > (view.size.w-2)*view.unit) then
+        breaks = breaks+1
+      end
+      
+      if (string.sub(str,i,i) ~= " ") then
+        worldCellText:set(string.sub(str, i, i))
+        love.graphics.draw(worldCellText, i*view.unit - (view.size.w-2)*view.unit*breaks, view.unit + breaks*view.unit)
+      else
+        worldCellText:clear()
+      end
+    end
+    
+    local str = ("=> "..tostring(typedWord))
+    for i=1,#str do
+      if (string.sub(str,i,i) ~= " ") then
+        worldCellText:set(string.sub(str, i, i))
+        love.graphics.draw(worldCellText, i*view.unit, view.unit*3 + breaks*view.unit)
+      else
+        worldCellText:clear()
+      end
+    end
+    
+    return
+  end
   
   -- Draw gridcells on view  
   for x=view.position.x*view.size.w+1, (view.position.x+1)*view.size.w do
@@ -274,10 +353,16 @@ function love.draw()
   -- Draw player, always in last
   drawExplorer(explorer, view, worldCellText)
   
+  -- Label 
+  if (displayLabel) then
+    drawLabel(theseWords.currentWord)
+  end
+  
   -- Hud elements
   if (dialog.ongoing) then
     dialog:draw(view, worldCellText)
   end
+  
 end
 
 
@@ -287,6 +372,48 @@ function view:refreshView(thisWorld, explorer)
     x= math.floor(((explorer.position.x-1)/thisWorld.size.w)*(thisWorld.size.w/self.size.w)),
     y= math.floor(((explorer.position.y-1)/thisWorld.size.h)*(thisWorld.size.h/self.size.h))
   }
+end
+
+function drawLabel(str)
+  
+  local str = "One day,on your trip to        "..str.."..."
+  
+  if (math.floor(screens/2) == view.position.x and
+      math.floor(screens/2) == view.position.y) then 
+      
+    -- Drawing label if player is not at the bottom of the screen
+    local y=(explorer.position.y-view.position.y*view.size.h-1)
+    
+    if (y < view.size.h-3) then
+      
+      love.graphics.setColor(0,0,0)
+      love.graphics.rectangle("fill", 0, (view.size.w-3)*view.unit, view.unit*view.size.w, 3*view.unit)
+      love.graphics.setColor(255,255,255)
+  
+      local skips = 0
+      
+      for i=1,#str do
+        
+        local breaks = 0
+        local pos = i
+        
+        while (pos > view.size.h) do
+          breaks = breaks +1
+          pos = pos - view.size.h
+        end
+        
+        if (string.sub(str,i,i) ~= " ") then
+          worldCellText:set(string.sub(str, i, i))
+          love.graphics.draw(worldCellText, (pos-skips-1)*view.unit, view.unit*(view.size.h-3) + breaks*view.unit)
+        else
+          if (pos == 1 and breaks < 2) then
+            skips = skips +1
+          end
+          worldCellText:clear()
+        end
+      end
+    end    
+  end
 end
 
 function drawEntity(entity, view, worldCellText)
